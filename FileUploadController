@@ -1,0 +1,104 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Hosting;
+using System.IO;
+using log4net;
+using Microsoft.AspNetCore.Http;
+using System.Threading;
+using UniteCaptureToolUI.Areas.Configuration.Controllers;
+using Intellect.Unite.CaptureTools.Model;
+using DocumentFormat.OpenXml.Spreadsheet;
+using WebCaptureToolsOpenSrcClient;
+using System;
+using OfficeOpenXml.FormulaParsing.Excel.Functions.Math;
+
+namespace UniteCaptureToolUI.Areas.Utilities.Controllers
+{
+    public class FileUploadController : Controller
+    {
+        UniteCaptureToolUI.Services.GenericService service = new UniteCaptureToolUI.Services.GenericService();
+        ILog log = LogManager.GetLogger(typeof(FileUploadController));
+        string culture = ""; 
+        string rootPath = "";
+        string path = "//wwwroot//Report//";
+        private const long MaxFileSize = 1024 * 1024;
+        public FileUploadController(IWebHostEnvironment webHostEnvironmen)
+        {
+            string culture = "";
+            if (HttpContext != null)
+            {
+                if (HttpContext.Session.GetString("culture") == null)
+                {
+                    culture = "en-GB";
+                }
+                else
+                {
+                    culture = (string)HttpContext.Session.GetString("culture");
+                }
+            }
+            Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo(culture);
+            Thread.CurrentThread.CurrentUICulture = Thread.CurrentThread.CurrentCulture;
+            var v = new System.Globalization.DateTimeFormatInfo();
+            v.ShortDatePattern = "dd/MM/yyyy";
+            Thread.CurrentThread.CurrentUICulture.DateTimeFormat = v;
+            rootPath = webHostEnvironmen.ContentRootPath;
+        }
+
+        [HttpGet]
+        public IActionResult FileUpload()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public IActionResult FileUpload(FileUploadModel model)
+        {
+            UserCredentials users = HttpContext.Session.GetSessionData<UserCredentials>("UserCredentials");
+
+            
+            if (model.FileToUpload != null && model.FileToUpload.Length > 0)
+            {
+                if (model.FileToUpload.Length <= MaxFileSize)
+                {
+                  string uploadsFolder = Path.Combine(rootPath,"wwwroot", "uploads");
+                    if(!Directory.Exists(uploadsFolder))
+                    {
+                        Directory.CreateDirectory(uploadsFolder);
+                    }
+                    string uniqueFileName =Convert.ToString(users.PacsID)+".pdf";
+                    string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                    DeletePDFs(uploadsFolder, users.PacsID);
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    model.FileToUpload.CopyTo(stream);
+                }
+
+                ViewBag.Message = "File uploaded successfully.";
+                }
+                else
+                {
+                    ModelState.AddModelError("FileToUpload", "The file size exceeds the maximum allowed (1MB).");
+                }
+            }
+
+            return View();
+        }
+        public void DeletePDFs(string folderPath,long pacsid)
+        {
+            try
+            {
+
+                DirectoryInfo di = new DirectoryInfo(folderPath);
+                foreach (FileInfo file in di.GetFiles(pacsid+".pdf"))
+                {
+                    file.Delete();
+                }
+
+            }
+            catch (Exception ex)
+            {
+                log.Error(" Exception raised at DeletePDFs, and the exception is : " + ex.ToString());
+            }
+
+        }
+    }
+}
